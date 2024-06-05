@@ -1,0 +1,180 @@
+image: product-security-docker.jfrog.goriv.co/nebula-ci-builder:latest
+stages:
+  - test
+  - build
+  - deploy
+
+.go-cache:
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - .go/pkg/mod/
+      - build/
+      - .cache/go-build
+    policy: pull-push
+  before_script:
+    - mkdir -p .go .cache/go-build build
+
+🧪 Test Linux & PKCS11:
+  stage: test
+  image: product-security-docker.jfrog.goriv.co/golang:1.22.2-bullseye
+  extends: .go-cache
+  tags:
+    - prodsec
+  script:
+    - make all
+    - make vet
+    - make test
+    - make e2evv
+    - make bin-pkcs11
+    - make test-pkcs11
+
+
+🔨 Build for humans 👬:
+  stage: build
+  extends: .go-cache
+  tags:
+    - prodsec
+  script:
+    - export DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+    - export BUILD_NUMBER="${DATE}-${CI_COMMIT_SHA}"
+    - make -j build/linux-amd64/nebula build/darwin-amd64/nebula build/darwin-arm64/nebula build/windows-amd64/nebula.exe
+  artifacts:
+    paths:
+      - build/linux-amd64/nebula
+      - build/darwin-amd64/nebula
+      - build/darwin-arm64/nebula
+      - build/windows-amd64/nebula.exe
+      - dist/windows
+
+🔨 Build for vehicle 🚗:
+  stage: build
+  extends: .go-cache
+  tags:
+    - prodsec
+  script:
+    - export ARTIFACTORY_UPLOAD_BASE_URL="https://jfrog.goriv.co/artifactory/vendor_binaries/nebula/$(git rev-parse HEAD)/";
+    - export LDFLAGS="-X 'main.Build=${CI_COMMIT_SHA}'"
+    - echo "ARTIFACTORY_UPLOAD_BASE_URL - $ARTIFACTORY_UPLOAD_BASE_URL"
+    - echo "COMMIT_HASH - ${CI_COMMIT_SHA}"
+    - CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOARCH=arm64 go build -tags cgo,pkcs11 -buildvcs=false -ldflags="${LDFLAGS}" -o nebula.arm64 ./cmd/nebula
+    - CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOARCH=arm64 go build -tags cgo,pkcs11 -buildvcs=false -ldflags="${LDFLAGS}" -o nebula-cert.arm64 ./cmd/nebula-cert
+    - echo "NEBULA_SHA256=$(sha256sum nebula.arm64 | cut -d ' ' -f1)" >> build.env
+    - echo "NEBULA_CERT_SHA256=$(sha256sum nebula-cert.arm64 | cut -d ' ' -f1)" >> build.env
+  artifacts:
+    paths:
+      - nebula.arm64
+      - nebula-cert.arm64
+    reports:
+      dotenv: build.env
+
+📬 Deploy for humans 👬:
+  stage: deploy
+  tags:
+    - prodsec
+  variables:
+    GIT_STRATEGY: none
+  needs:
+  - job: 🔨 Build for humans 👬
+    artifacts: true
+  script:
+    - export ARTIFACTORY_UPLOAD_BASE_URL="https://jfrog.goriv.co/artifactory/vendor_binaries/nebula/${CI_COMMIT_SHA}/not-vehicle/";
+    - echo "ARTIFACTORY_UPLOAD_BASE_URL - $ARTIFACTORY_UPLOAD_BASE_URL"
+    - curl -H "X-JFrog-Art-Api:$GOLANG_PASSWORD" -T "build/darwin-amd64/nebula" "$ARTIFACTORY_UPLOAD_BASE_URL"/darwin-amd64/nebula
+    - curl -H "X-JFrog-Art-Api:$GOLANG_PASSWORD" -T "build/darwin-arm64/nebula" "$ARTIFACTORY_UPLOAD_BASE_URL"/darwin-arm64/nebula
+    - curl -H "X-JFrog-Art-Api:$GOLANG_PASSWORD" -T "build/linux-amd64/nebula" "$ARTIFACTORY_UPLOAD_BASE_URL"/linux-amd64/nebula
+    - curl -H "X-JFrog-Art-Api:$GOLANG_PASSWORD" -T "build/windows-amd64/nebula.exe" "$ARTIFACTORY_UPLOAD_BASE_URL"/windows-amd64/nebula.exe
+    - mkdir build/windows-amd64/dist/
+    - mv dist/windows build/windows-amd64/dist/
+    - cd build/windows-amd64
+    - zip -r nebula-windows-amd64.zip nebula.exe dist
+    - curl -H "X-JFrog-Art-Api:$GOLANG_PASSWORD" -T "nebula-windows-amd64.zip" "$ARTIFACTORY_UPLOAD_BASE_URL"
+
+📬 Deploy for vehicle 🚗:
+  stage: deploy
+  tags:
+    - prodsec
+  variables:
+    GIT_STRATEGY: none
+  needs:
+    - job: 🔨 Build for vehicle 🚗
+      artifacts: true
+  script:
+    - export ARTIFACTORY_UPLOAD_BASE_URL="https://jfrog.goriv.co/artifactory/vendor_binaries/nebula/${CI_COMMIT_SHA}/vehicle/";
+    - echo "ARTIFACTORY_UPLOAD_BASE_URL - $ARTIFACTORY_UPLOAD_BASE_URL"
+    - curl -H "X-JFrog-Art-Api:$GOLANG_PASSWORD" -T nebula.arm64 "$ARTIFACTORY_UPLOAD_BASE_URL"
+    - curl -H "X-JFrog-Art-Api:$GOLANG_PASSWORD" -T nebula-cert.arm64 "$ARTIFACTORY_UPLOAD_BASE_URL"
+
+⤴ Bump Firmware:
+  stage: deploy
+  tags:
+    - prodsec
+  image: product-security-docker.jfrog.goriv.co/gitlab/glab
+  needs:
+    - job: 🔨 Build for vehicle 🚗
+      artifacts: true
+    - job: 📬 Deploy for vehicle 🚗
+  when: manual
+  variables:
+    FIRMWARE_REPO_PROJECT_ID: 3928
+    FIRMWARE_FILE_PATH: "ecu%2Fconnectivity%2Fyocto%2Fmeta-rivian%2Frecipes-3rdparty%2Fnebula%2Fnebula.bb"
+    GIT_STRATEGY: none
+  script:
+    - GITLAB_HOST=${CI_SERVER_URL#*//}
+    # Get the current commit hash
+    - export COMMIT_HASH="${CI_COMMIT_SHA}"
+    - echo "Using commit hash=$COMMIT_HASH"
+
+    #  Calculate SHA256 of the binary
+    #    - export BINARY_SHA256="$(sha256sum nebula-configurator.arm64 | cut -d' ' -f1)"
+    # or don't we pull this from the build.env file now
+    - echo "Binary NEBULA_SHA256=$NEBULA_SHA256"
+    - echo "Binary NEBULA_CERT_SHA256=$NEBULA_CERT_SHA256"
+
+    # Create new branch in firmware repo
+    - export BRANCH_NAME="bump-nebula-${COMMIT_HASH:0:8}"
+    - 'glab api --hostname ${GITLAB_HOST} "/projects/${FIRMWARE_REPO_PROJECT_ID}/repository/branches" --method POST --header "PRIVATE-TOKEN: $GL_TOKEN" --raw-field "branch=${BRANCH_NAME}" --raw-field "ref=main"'
+
+    # Get the specific file we need to modify
+    - mkdir -p firmware
+    - 'glab api --hostname ${GITLAB_HOST} "/projects/${FIRMWARE_REPO_PROJECT_ID}/repository/files/${FIRMWARE_FILE_PATH}/raw?ref=main" --method GET --header "PRIVATE-TOKEN: $GL_TOKEN" > firmware/nebula_git.bb'
+
+    # Update the file with new hash and SHA256
+    - sed -i "s/NEBULA_GITHASH = \".*\"/NEBULA_GITHASH = \"${COMMIT_HASH}\"/" firmware/nebula_git.bb
+    - sed -i "s/SRC_URI\[nebula.sha256sum\] = \".*\"/SRC_URI[nebula.sha256sum] = \"${NEBULA_SHA256}\"/" firmware/nebula_git.bb
+    - sed -i "s/SRC_URI\[nebulacert.sha256sum\] = \".*\"/SRC_URI[nebulacert.sha256sum] = \"${NEBULA_CERT_SHA256}\"/" firmware/nebula_git.bb
+
+    # Encode file content in base64
+    - export FILE_CONTENT=$(base64 -w 0 firmware/nebula_git.bb)
+
+    # Commit changes to firmware repo
+    - 'glab api --hostname ${GITLAB_HOST} "/projects/${FIRMWARE_REPO_PROJECT_ID}/repository/files/${FIRMWARE_FILE_PATH}" --method PUT --header "PRIVATE-TOKEN: $GL_TOKEN" --raw-field "branch=${BRANCH_NAME}" --raw-field "content=${FILE_CONTENT}" --raw-field "commit_message=bump nebula to ${COMMIT_HASH}" --raw-field "encoding=base64"'
+
+    # Create merge request
+    - 'glab api --hostname ${GITLAB_HOST} "/projects/${FIRMWARE_REPO_PROJECT_ID}/merge_requests" --method POST --header "PRIVATE-TOKEN: $GL_TOKEN" --raw-field "source_branch=${BRANCH_NAME}" --raw-field "target_branch=main" --raw-field "title=SYSINT-228974 bump nebula to ${COMMIT_HASH:0:8}" --raw-field "description=Automated update of nebula to commit ${COMMIT_HASH}"'
+
+🚢 Ship release for humans 👬:
+  stage: deploy
+  tags:
+    - prodsec
+  variables:
+    GIT_STRATEGY: none
+  needs:
+    - job: 🔨 Build for humans 👬
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+    - if: $CI_ONE_OFF_RELEASE == "true"
+  script:
+    - export ARTIFACTORY_UPLOAD_BASE_URL="https://jfrog.goriv.co/artifactory/vendor_binaries/nebula/master/not-vehicle/";
+    - echo "ARTIFACTORY_UPLOAD_BASE_URL - $ARTIFACTORY_UPLOAD_BASE_URL"
+    - curl -H "X-JFrog-Art-Api:$GOLANG_PASSWORD" -T "build/darwin-amd64/nebula" "$ARTIFACTORY_UPLOAD_BASE_URL"/darwin-amd64/nebula
+    - curl -H "X-JFrog-Art-Api:$GOLANG_PASSWORD" -T "build/darwin-arm64/nebula" "$ARTIFACTORY_UPLOAD_BASE_URL"/darwin-arm64/nebula
+    - curl -H "X-JFrog-Art-Api:$GOLANG_PASSWORD" -T "build/linux-amd64/nebula" "$ARTIFACTORY_UPLOAD_BASE_URL"/linux-amd64/nebula
+    - curl -H "X-JFrog-Art-Api:$GOLANG_PASSWORD" -T "build/windows-amd64/nebula.exe" "$ARTIFACTORY_UPLOAD_BASE_URL"/windows-amd64/nebula.exe
+    - mkdir build/windows-amd64/dist/
+    - mv dist/windows build/windows-amd64/dist/
+    - cd build/windows-amd64
+    - zip -r nebula-windows-amd64.zip nebula.exe dist
+    - curl -H "X-JFrog-Art-Api:$GOLANG_PASSWORD" -T "nebula-windows-amd64.zip" "$ARTIFACTORY_UPLOAD_BASE_URL"

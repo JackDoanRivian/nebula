@@ -1,0 +1,8 @@
+FROM golang:1.22.2-bullseye
+
+# Install cross-compilation tools and zip
+RUN apt-get update && apt-get install -y \
+    gcc-aarch64-linux-gnu \
+    zip
+
+WORKDIR /app

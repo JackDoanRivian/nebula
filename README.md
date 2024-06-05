@@ -1,3 +1,22 @@
+> [!info]
+> This is Rivian's fork of upstream `nebula`.
+> 
+> The default branch is `release`, it mirrors the upstream `master` and `cert-v2` branches. We occasionally rebase our `release` branch on `master`/`cert-v2` to keep it up to date.
+
+## Rivian Details
+
+### CI Build Container
+building our CI docker container:
+```bash
+docker build -f Dockerfile-ci-builder . -t nebula-ci-builder:latest
+```
+
+push it to our registry with:
+```bash
+docker tag nebula-ci-builder:latest product-security-docker.jfrog.goriv.co/nebula-ci-builder:latest
+docker push product-security-docker.jfrog.goriv.co/nebula-ci-builder:latest
+```
+
 ## What is Nebula?
 Nebula is a scalable overlay networking tool with a focus on performance, simplicity and security.
 It lets you seamlessly connect computers anywhere in the world. Nebula is portable, and runs on Linux, OSX, Windows, iOS, and Android.

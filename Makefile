@@ -28,37 +28,12 @@ DOCKER_IMAGE_TAG ?= latest
 LDFLAGS = -X main.Build=$(BUILD_NUMBER)
 
 ALL_LINUX = linux-amd64 \
-	linux-386 \
-	linux-ppc64le \
-	linux-arm-5 \
-	linux-arm-6 \
-	linux-arm-7 \
 	linux-arm64 \
-	linux-mips \
-	linux-mipsle \
-	linux-mips64 \
-	linux-mips64le \
-	linux-mips-softfloat \
-	linux-riscv64 \
-	linux-loong64
-
-ALL_FREEBSD = freebsd-amd64 \
-	freebsd-arm64
-
-ALL_OPENBSD = openbsd-amd64 \
-	openbsd-arm64
-
-ALL_NETBSD = netbsd-amd64 \
- 	netbsd-arm64
 
 ALL = $(ALL_LINUX) \
-	$(ALL_FREEBSD) \
-	$(ALL_OPENBSD) \
-	$(ALL_NETBSD) \
 	darwin-amd64 \
 	darwin-arm64 \
-	windows-amd64 \
-	windows-arm64
+	windows-amd64
 
 e2e:
 	$(TEST_ENV) go test -tags=e2e_testing -count=1 $(TEST_FLAGS) ./e2e
