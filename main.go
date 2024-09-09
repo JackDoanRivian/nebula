@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/slackhq/nebula/cert"
@@ -227,7 +228,15 @@ func Main(c *config.C, configTest bool, buildVersion string, logger *logrus.Logg
 		if c.GetBool("lighthouse.am_lighthouse", false) {
 			serveDns = true
 		} else {
-			l.Warn("DNS server refusing to run because this host is not a lighthouse.")
+			dnsHostStr := strings.TrimSpace(c.GetString("lighthouse.dns.host", ""))
+			dnsHost, err := netip.ParseAddr(dnsHostStr)
+			if err != nil {
+				l.Warn("Failed to parse lighthouse.dns.host", dnsHostStr)
+			} else if dnsHost.IsLoopback() {
+				serveDns = true
+			} else {
+				l.Warn("DNS server refusing to bind to non-localhost because this host is not a lighthouse.")
+			}
 		}
 	}
 
@@ -298,7 +307,7 @@ func Main(c *config.C, configTest bool, buildVersion string, logger *logrus.Logg
 
 	// Start DNS server last to allow using the nebula IP as lighthouse.dns.host
 	var dnsStart func()
-	if lightHouse.amLighthouse && serveDns {
+	if serveDns {
 		l.Debugln("Starting dns server")
 		dnsStart = dnsMain(l, pki.getCertState(), hostMap, c)
 	}
