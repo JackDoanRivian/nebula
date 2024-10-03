@@ -757,8 +757,6 @@ func (lh *LightHouse) innerQueryServer(addr netip.Addr, nb, out []byte) {
 		Details: &NebulaMetaDetails{},
 	}
 
-	//TODO: remove this
-	v = 2
 	if v == 1 {
 		if !addr.Is4() {
 			lh.l.WithField("vpnAddr", addr).Error("Can't query lighthouse for v6 address using a v1 protocol")
