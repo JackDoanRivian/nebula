@@ -344,10 +344,10 @@ func (n *connectionManager) makeTrafficDecision(localIndex uint32, now time.Time
 	// A hostinfo is determined alive if there is incoming traffic
 	if inTraffic {
 		decision := doNothing
-		if n.l.Level >= logrus.DebugLevel {
+		if n.l.Level >= logrus.TraceLevel {
 			hostinfo.logger(n.l).
 				WithField("tunnelCheck", m{"state": "alive", "method": "passive"}).
-				Debug("Tunnel status")
+				Trace("Tunnel status")
 		}
 		delete(n.pendingDeletion, hostinfo.localIndexId)
 
@@ -401,10 +401,10 @@ func (n *connectionManager) makeTrafficDecision(localIndex uint32, now time.Time
 			n.sendPunch(hostinfo)
 		}
 
-		if n.l.Level >= logrus.DebugLevel {
+		if n.l.Level >= logrus.TraceLevel {
 			hostinfo.logger(n.l).
 				WithField("tunnelCheck", m{"state": "testing", "method": "active"}).
-				Debug("Tunnel status")
+				Trace("Tunnel status")
 		}
 
 		// Send a test packet to trigger an authenticated tunnel test, this should suss out any lingering tunnel issues
