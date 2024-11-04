@@ -101,6 +101,10 @@ func (c *certificateV1) Fingerprint() (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
+func (c *certificateV1) OldFingerprint() (string, error) {
+	return c.Fingerprint()
+}
+
 func (c *certificateV1) CheckSignature(key []byte) bool {
 	b, err := proto.Marshal(c.getRawDetails())
 	if err != nil {

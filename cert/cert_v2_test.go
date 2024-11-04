@@ -265,3 +265,41 @@ func TestCertificateV2_marshalForSigningStability(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expectedForSigning, b)
 }
+
+func TestCertificateV2_Fingerprint(t *testing.T) {
+	const testCertPem = `-----BEGIN NEBULA CERTIFICATE V2-----
+MIGaoDSABHRlc3SFBGco5JKGBGco5b6HIDn4yjd/DPKq/RdFZx/JDoJ6WO1IGTQ1
+5qXgaqeXC68mgiAXEeQpSu8WpA5uTPZdHvPd2oKT47krpge5LE3Rfek2dYNAve3Y
+SBSHzi+0xJXW9ZX8025KgTF45o2F7V/L0RGXKQkzxx6o2eePr63ubshXAx1OKwJu
+lCf8Qk6S79DBP5x2AQ==
+-----END NEBULA CERTIFICATE V2-----`
+
+	const testFingerprint = "812dc880ec4755b8083ed3dd982e6ecacf2b8b72e770c5b54dc95e51b11865ca"
+
+	c, _, err := UnmarshalCertificateFromPEM([]byte(testCertPem))
+	require.NoError(t, err)
+
+	fprint, err := c.Fingerprint()
+	require.NoError(t, err)
+
+	assert.Equal(t, testFingerprint, fprint)
+}
+
+func TestCertificateV2_OldFingerprint(t *testing.T) {
+	const testCertPem = `-----BEGIN NEBULA CERTIFICATE V2-----
+MIGaoDSABHRlc3SFBGco5JKGBGco5b6HIDn4yjd/DPKq/RdFZx/JDoJ6WO1IGTQ1
+5qXgaqeXC68mgiAXEeQpSu8WpA5uTPZdHvPd2oKT47krpge5LE3Rfek2dYNAve3Y
+SBSHzi+0xJXW9ZX8025KgTF45o2F7V/L0RGXKQkzxx6o2eePr63ubshXAx1OKwJu
+lCf8Qk6S79DBP5x2AQ==
+-----END NEBULA CERTIFICATE V2-----`
+
+	const testFingerprint = "ed1b0fab21ee3fb16274847b4a537c01dbf204959ce1d2b8cb445425a0d649ad"
+
+	c, _, err := UnmarshalCertificateFromPEM([]byte(testCertPem))
+	require.NoError(t, err)
+
+	oldF, err := c.OldFingerprint()
+	require.NoError(t, err)
+
+	assert.Equal(t, testFingerprint, oldF)
+}

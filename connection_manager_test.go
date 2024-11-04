@@ -397,6 +397,10 @@ func (d *dummyCert) Fingerprint() (string, error) {
 	return "", nil
 }
 
+func (d *dummyCert) OldFingerprint() (string, error) {
+	return "", nil
+}
+
 func (d *dummyCert) MarshalJSON() ([]byte, error) {
 	return nil, nil
 }

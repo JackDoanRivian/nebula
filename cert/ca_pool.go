@@ -84,6 +84,10 @@ func (ncp *CAPool) AddCA(c Certificate) error {
 	if err != nil {
 		return fmt.Errorf("could not calculate fingerprint for provided CA; error: %w; %s", err, c.Name())
 	}
+	oldsum, err := c.OldFingerprint()
+	if err != nil {
+		return fmt.Errorf("could not calculate old fingerprint for provided CA; error: %w; %s", err, c.Name())
+	}
 
 	cc := &CachedCertificate{
 		Certificate:    c,
@@ -96,6 +100,7 @@ func (ncp *CAPool) AddCA(c Certificate) error {
 	}
 
 	ncp.CAs[sum] = cc
+	ncp.CAs[oldsum] = cc
 
 	if c.Expired(time.Now()) {
 		return fmt.Errorf("%s: %w", c.Name(), ErrExpired)

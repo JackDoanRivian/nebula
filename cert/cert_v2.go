@@ -136,6 +136,20 @@ func (c *certificateV2) Fingerprint() (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
+func (c *certificateV2) OldFingerprint() (string, error) {
+	if len(c.rawDetails) == 0 {
+		return "", ErrMissingDetails
+	}
+
+	b := make([]byte, len(c.rawDetails)+1+len(c.publicKey)) //note lack of signature included here
+	copy(b, c.rawDetails)
+	b[len(c.rawDetails)] = byte(c.curve)
+	copy(b[len(c.rawDetails)+1:], c.publicKey)
+	//copy(b[len(c.rawDetails)+1+len(c.publicKey):], c.signature) //does nothing
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:]), nil
+}
+
 func (c *certificateV2) CheckSignature(key []byte) bool {
 	if len(c.rawDetails) == 0 {
 		return false

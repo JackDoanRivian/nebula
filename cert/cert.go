@@ -73,6 +73,9 @@ type Certificate interface {
 	// This acts as a unique fingerprint and can be used to blocklist certificates.
 	Fingerprint() (string, error)
 
+	// OldFingerprint is like Fingerprint, but old and bad
+	OldFingerprint() (string, error)
+
 	// Expired tests if the certificate is valid for the provided time.
 	Expired(t time.Time) bool
 
